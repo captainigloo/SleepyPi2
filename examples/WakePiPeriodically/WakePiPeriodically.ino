@@ -1,16 +1,23 @@
 // 
-// Simple example showing how to set the RTC alarm pin to wake up the Arduino.
+// Simple example showing how to set the RTC alarm pin to wake up the Arduino
+// which in turn wakes up the Rpi. You can use this to do things with the Rpi 
+// at regular intervals i.e. like taking a photograph.
+//
+// Note, in this example the Rpi is woken up for every 5 minutes. Once woken
+// it is then shutdown after 1 minute. The system then goes into low power mode
+// for the remaining 4 minutes before the Rpi is woken again and the cycle repeats.
+//
 // This is a different mode to the alarm clock, which wakes at a particular time.
 // This mode is a repeating periodic time, waking the Arduino at fixed intervals.
-// Note: this example doesn't wake up the RPi. For that add:
 //
-//     SleepyPi.enablePiPower(true);  
-//
-// after arduino wakeup. For a clearer picture of how to do this see the
-// eaxmple WakePiPeriodically which wakes the Rpi at fixed intervals. 
-// 
 // To test on the RPi without power cycling and using the Arduino IDE
-// to view the debug messages, either fit the Power Jumper or enable
+// to view the debug messages, comment out these line (with a //):
+//
+// SleepyPi.enablePiPower(true);
+// SleepyPi.piShutdown();      
+// SleepyPi.enableExtPower(false);  
+// 
+// Also either fit the Power Jumper or enable
 // self-power. http://spellfoundry.com/sleepy-pi/programming-arduino-ide/
 // 
 
@@ -29,12 +36,17 @@ const char *monthName[12] = {
 const int LED_PIN = 13;
 
 // Globals
-// ++++++++++++++++++++ Change me ++++++++++++++++++
+// ++++++++++++++++++++ CHANGE ME ++++++++++++++++++
+// This is the repeating time interval that the Rpi is powered up.
+// NOTE: ACTUAL CYCLE TIME IS TIMER INTERVAL + HOW LONG RPI AWAKE
+// Thus = 5 minutes = 4 mins + awake of 1 min
 // .. Setup the Periodic Timer
 // .. use either eTB_SECOND or eTB_MINUTE or eTB_HOUR
-eTIMER_TIMEBASE  PeriodicTimer_Timebase     = eTB_SECOND;   // e.g. Timebase set to seconds. Other options: eTB_MINUTE, eTB_HOUR
-uint8_t          PeriodicTimer_Value        = 10;           // Timer Interval in units of Timebase e.g 10 seconds
-// ++++++++++++++++++++ End Change me ++++++++++++++++++
+eTIMER_TIMEBASE  PeriodicTimer_Timebase     = eTB_MINUTE;   // e.g. Timebase set to seconds. Other options: eTB_MINUTE, eTB_HOUR
+uint8_t          PeriodicTimer_Value        = 5;            // Timer Interval in units of Timebase e.g 5 minutes
+// Time the Rpi stays awake for:
+unsigned long    RPI_TIME_TO_STAY_AWAKE_MS  = 60000;       // in ms - so this is 60 seconds
+// ++++++++++++++++++++ END CHANGE ME ++++++++++++++++++
 
 tmElements_t tm;
 
@@ -73,17 +85,21 @@ void setup()
   switch(PeriodicTimer_Timebase)
   {
     case eTB_SECOND:
-      Serial.println(" seconds");
+      Serial.print(" seconds");
       break;
     case eTB_MINUTE:
-      Serial.println(" minutes");
+      Serial.print(" minutes");
       break;
     case eTB_HOUR:
-      Serial.println(" hours");
+      Serial.print(" hours");
     default:
-        Serial.println(" unknown timebase");
+        Serial.print(" unknown timebase");
         break;
   }
+  Serial.print(" + ");
+  Serial.print(RPI_TIME_TO_STAY_AWAKE_MS / 1000);
+  Serial.println(" seconds");
+
 }
 
 void loop() 
@@ -107,15 +123,25 @@ void loop()
     
     SleepyPi.ackTimer1();
 
-    // Do something here
-    // Example: Read sensor, data logging, data transmission.
-    // Just a handler for the pin interrupt.
+    // Uncomment this line to turn the Rpi On
+    SleepyPi.enablePiPower(true);
+
+    // Just a few things to show what's happening
     digitalWrite(LED_PIN,HIGH);    // Switch on LED
     Serial.println("I've Just woken up on a Periodic Timer!");
     // Print the time
     printTimeNow();   
     delay(50);
-    digitalWrite(LED_PIN,LOW);    // Switch off LED   
+    digitalWrite(LED_PIN,LOW);    // Switch off LED  
+
+    // Do something on the Rpi here (instead of the delay()
+    // Example: Take a Picture
+    // This is the time that the Rpi will be "awake" for
+    delay(RPI_TIME_TO_STAY_AWAKE_MS);        
+
+    // Start a shutdown
+    SleepyPi.piShutdown();      
+    SleepyPi.enableExtPower(false); 
 }
 
 // **********************************************************************
@@ -123,6 +149,7 @@ void loop()
 //  - Helper routines
 //
 // **********************************************************************
+
 void printTimeNow()
 {
     // Read the time
